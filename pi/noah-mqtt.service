@@ -1,6 +1,6 @@
-# Haelt den Container noah-mqtt am Leben: startet ihn per docker compose und wartet auf sein Ende.
-# Stirbt der Container, startet systemd ihn nach 6 Minuten neu.
-# Installation: Pfad in WorkingDirectory anpassen, nach /etc/systemd/system/ kopieren,
+# Keeps the noah-mqtt container alive: starts it via docker compose and waits for it to exit.
+# If the container dies, systemd restarts it after 6 minutes.
+# Installation: adjust the path in WorkingDirectory, copy to /etc/systemd/system/,
 #   sudo systemctl daemon-reload && sudo systemctl enable --now noah-mqtt
 [Unit]
 Description=noah-mqtt Docker Compose Watchdog

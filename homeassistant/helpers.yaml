@@ -1,10 +1,10 @@
-# Helfer, die die Automationen brauchen. In configuration.yaml einbinden, zum Beispiel:
-#   input_number: !include_dir_merge_named ...   oder die Bloecke direkt dort eintragen.
-# Alternativ in der Oberflaeche unter Einstellungen -> Geraete & Dienste -> Helfer anlegen.
+# Helpers the automations need. Include them in configuration.yaml, for example:
+#   input_number: !include_dir_merge_named ...   or put the blocks there directly.
+# Alternatively create them in the UI under Settings -> Devices & services -> Helpers.
 
 input_number:
-  noah_letzter_sollwert:
-    name: NOAH letzter Sollwert
+  noah_last_setpoint:
+    name: NOAH last setpoint
     min: 0
     max: 800
     step: 1
@@ -12,21 +12,21 @@ input_number:
     mode: box
 
 input_boolean:
-  noah_diff_warnung:
-    name: NOAH SoC-Differenz-Warnung aktiv
+  noah_soc_diff_warning:
+    name: NOAH SoC difference warning active
     icon: mdi:battery-alert
 
-# Erwartet wird ausserdem ein Sensor sensor.hausverbrauch (aktuelle Leistung des Haushalts in W).
-# Woher er kommt, ist egal: Smart-Meter-Lesekopf, Summe von Messsteckdosen, Template-Sensor.
-# Beispiel fuer einen Template-Sensor aus Netzbezug und NOAH-Ausgang:
+# A sensor sensor.house_consumption is also expected (current household power in W).
+# Where it comes from doesn't matter: smart meter reader, sum of metering plugs, template sensor.
+# Example of a template sensor from grid import and NOAH output:
 #
 # template:
 #   - sensor:
-#       - name: Hausverbrauch
-#         unique_id: hausverbrauch
+#       - name: House consumption
+#         unique_id: house_consumption
 #         unit_of_measurement: W
 #         device_class: power
 #         state_class: measurement
 #         state: >
-#           {{ (states('sensor.stromzaehler_leistung') | float(0)
+#           {{ (states('sensor.power_meter_power') | float(0)
 #               + states('sensor.noah_2000_output_power') | float(0)) | round(0) }}

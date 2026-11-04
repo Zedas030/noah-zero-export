@@ -17,13 +17,13 @@ uni-meter {
   input-devices {
     mqtt {
       url = "tcp://<mqtt-host>:1883"
-      user = "<mqtt-benutzer>"
-      password = "<mqtt-passwort>"
+      user = "<mqtt-user>"
+      password = "<mqtt-password>"
       power-phase-mode = "mono-phase"
       energy-phase-mode = "mono-phase"
       channels = [{
         type = "json"
-        topic = "home/hausverbrauch"
+        topic = "home/house_consumption"
         channel = "power-l1"
         json-path = "$.power"
       }]

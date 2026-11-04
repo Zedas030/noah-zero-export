@@ -1,116 +1,118 @@
-# NOAH-Nulleinspeisung mit Home Assistant
+# NOAH zero export with Home Assistant
 
-Regelt die Ausgangsleistung eines **Growatt NOAH 2000** (Balkonkraftwerk-Speicher) jede Minute
-so, dass er ungefähr den aktuellen Hausverbrauch deckt und möglichst wenig ins Netz verschenkt.
-Dazu kommen ein Schutz der Akkus vor Tiefentladung, eine Überwachung der Ladezustände zwischen
-Haupt- und Zusatzakku und zwei Watchdogs, die aufs Handy melden, wenn die Regelung stehen bleibt.
+> 🇩🇪 German version: [noah-nulleinspeisung-de](https://github.com/Zedas030/noah-nulleinspeisung-de)
 
-Läuft seit Oktober 2026 auf einem Raspberry Pi mit Home Assistant, Mosquitto und Docker.
+Every minute, sets the output power of a **Growatt NOAH 2000** (balcony solar battery) so that
+it roughly covers the current household consumption and gives away as little as possible to the grid.
+On top of that: deep discharge protection for the batteries, monitoring of the charge levels of the
+main and extension battery, and two watchdogs that notify your phone when the control loop stops.
 
-## Datenfluss
+Running since October 2026 on a Raspberry Pi with Home Assistant, Mosquitto and Docker.
+
+## Data flow
 
 ```mermaid
 flowchart LR
-  G[Growatt-Cloud] <--> N[noah-mqtt<br/>Docker]
+  G[Growatt cloud] <--> N[noah-mqtt<br/>Docker]
   N <--> M[(Mosquitto)]
   M <--> HA[Home Assistant]
-  Z[Smart Meter, Messsteckdosen<br/>oder Template] --> H[sensor.hausverbrauch]
+  Z[Smart meter, metering plugs<br/>or template] --> H[sensor.house_consumption]
   H --> HA
-  HA -- jede Minute Sollwert --> N
-  HA -- alle 10 s home/hausverbrauch --> M
-  M --> U[uni-meter<br/>optional, emulierter Smart Meter]
-  HA -. Watchdogs .-> P[Push aufs Handy]
+  HA -- setpoint every minute --> N
+  HA -- every 10 s home/house_consumption --> M
+  M --> U[uni-meter<br/>optional, emulated smart meter]
+  HA -. watchdogs .-> P[Push to phone]
 ```
 
-## Wie die Regelung rechnet
+## How the control loop calculates
 
-Jede Minute, wenn alle Werte verfügbar sind:
+Every minute, when all values are available:
 
-| Größe | Regel |
+| Quantity | Rule |
 |---|---|
-| Ziel | Hausverbrauch minus Puffer, mindestens 50 W |
-| Puffer | 70 W bei SoC über 60 %, 90 W über 30 %, sonst 150 W |
-| Obergrenze | 800 W, unter 20 % SoC nur 100 W, unter 15 % SoC 0 W (Tiefentladeschutz) |
-| SoC | immer der **niedrigere** der beiden Akkus |
-| Hysterese | neuer Sollwert nur, wenn er um mindestens 40 W abweicht |
-| Akku-Drift | weichen die Akkus tagsüber um mehr als 6 % ab, wird auf 100 W gedrosselt und gemeldet |
+| Target | household consumption minus buffer, at least 50 W |
+| Buffer | 70 W at SoC above 60 %, 90 W above 30 %, otherwise 150 W |
+| Upper limit | 800 W, below 20 % SoC only 100 W, below 15 % SoC 0 W (deep discharge protection) |
+| SoC | always the **lower** of the two batteries |
+| Hysteresis | new setpoint only if it differs by at least 40 W |
+| Battery drift | if the batteries differ by more than 6 % during the day, output is throttled to 100 W and a notification is sent |
 
-Der Puffer lässt bewusst etwas Netzbezug zu. So deckt der Speicher den Grundverbrauch, ohne bei
-jeder kurzen Lastspitze hinterherzuregeln und dabei ins Netz einzuspeisen.
+The buffer deliberately allows a little grid import. That way the battery covers the base load without
+chasing every short load spike and feeding power into the grid while doing so.
 
-### Beispiel
+### Example
 
-Hausverbrauch 420 W, Akkus bei 55 % und 58 %, Sonne scheint, letzter Sollwert 300 W:
+Household consumption 420 W, batteries at 55 % and 58 %, sun is shining, last setpoint 300 W:
 
-1. SoC für alle Regeln ist der niedrigere Wert, also 55 %. Puffer daher 90 W, Obergrenze 800 W.
-2. Ziel = 420 − 90 = 330 W, liegt zwischen 50 und 800 W.
-3. Abweichung der Akkus 3 %, also keine Drosselung.
-4. 330 W weichen nur 30 W vom letzten Sollwert ab, unter der Hysterese von 40 W. Es wird nichts gesendet.
+1. The SoC for all rules is the lower value, so 55 %. Buffer is therefore 90 W, upper limit 800 W.
+2. Target = 420 − 90 = 330 W, which is between 50 and 800 W.
+3. Battery difference 3 %, so no throttling.
+4. 330 W differs from the last setpoint by only 30 W, below the 40 W hysteresis. Nothing is sent.
 
-## Bausteine
+## Building blocks
 
-| Datei | Zweck |
+| File | Purpose |
 |---|---|
-| [homeassistant/automations.yaml](homeassistant/automations.yaml) | Regelung, Hausverbrauch per MQTT, zwei Watchdogs |
-| [homeassistant/helpers.yaml](homeassistant/helpers.yaml) | benötigte Helfer und ein Beispiel für `sensor.hausverbrauch` |
-| [docker/docker-compose.yml](docker/docker-compose.yml) | [noah-mqtt](https://github.com/mtrossbach/noah-mqtt) und optional [uni-meter](https://github.com/sdeigm/uni-meter) |
-| [docker/uni-meter/uni-meter.conf.example](docker/uni-meter/uni-meter.conf.example) | emulierter Smart Meter aus dem MQTT-Topic `home/hausverbrauch` |
-| [pi/noah-mqtt.service](pi/noah-mqtt.service) | systemd hält den Container am Leben |
-| [pi/noah-mqtt-ensure.sh](pi/noah-mqtt-ensure.sh) | Neustart per SSH-Zwangsbefehl, aufrufbar aus Home Assistant |
+| [homeassistant/automations.yaml](homeassistant/automations.yaml) | control loop, household consumption via MQTT, two watchdogs |
+| [homeassistant/helpers.yaml](homeassistant/helpers.yaml) | required helpers and an example for `sensor.house_consumption` |
+| [docker/docker-compose.yml](docker/docker-compose.yml) | [noah-mqtt](https://github.com/mtrossbach/noah-mqtt) and optionally [uni-meter](https://github.com/sdeigm/uni-meter) |
+| [docker/uni-meter/uni-meter.conf.example](docker/uni-meter/uni-meter.conf.example) | emulated smart meter fed from the MQTT topic `home/house_consumption` |
+| [pi/noah-mqtt.service](pi/noah-mqtt.service) | systemd keeps the container alive |
+| [pi/noah-mqtt-ensure.sh](pi/noah-mqtt-ensure.sh) | restart via a forced SSH command, callable from Home Assistant |
 
-noah-mqtt und uni-meter sind fremde Projekte. Sie werden hier nur als Docker-Image eingebunden,
-ihr Code ist nicht Teil dieses Repos.
+noah-mqtt and uni-meter are third-party projects. They are only used here as Docker images,
+their code is not part of this repo.
 
-## Einrichtung
+## Setup
 
-1. **noah-mqtt starten.** `docker/.env.example` nach `.env` kopieren, MQTT- und Growatt-Zugang
-   eintragen, `docker compose up -d noah-mqtt`. Der NOAH erscheint per MQTT-Discovery in Home
-   Assistant, mit Entitäten wie `sensor.noah_2000_bat0_soc` und `number.noah_2000_system_output_power`.
-2. **Helfer anlegen** aus `helpers.yaml`, dazu einen Sensor `sensor.hausverbrauch` in Watt.
-3. **Automationen einspielen** aus `automations.yaml`. Die Entitäts-IDs an die eigene Anlage
-   anpassen, vor allem den Zusatzakku (`sensor.noah_2000_bat1_soc`, bei manchen Anlagen enthält die
-   ID die Seriennummer) und den Benachrichtigungsdienst (`notify.mobile_app_mein_handy`).
-4. Optional **uni-meter** mit der Beispielkonfiguration starten, wenn ein Gerät im LAN einen
-   Smart Meter erwartet.
-5. Optional den **systemd-Watchdog** und das **SSH-Skript** auf dem Docker-Host einrichten.
+1. **Start noah-mqtt.** Copy `docker/.env.example` to `.env`, enter your MQTT and Growatt
+   credentials, `docker compose up -d noah-mqtt`. The NOAH shows up in Home Assistant via MQTT discovery,
+   with entities such as `sensor.noah_2000_bat0_soc` and `number.noah_2000_system_output_power`.
+2. **Create the helpers** from `helpers.yaml`, plus a sensor `sensor.house_consumption` in watts.
+3. **Import the automations** from `automations.yaml`. Adapt the entity IDs to your own system,
+   especially the extension battery (`sensor.noah_2000_bat1_soc`; on some systems the ID contains
+   the serial number) and the notification service (`notify.mobile_app_my_phone`).
+4. Optionally start **uni-meter** with the example configuration if a device on your LAN expects a
+   smart meter.
+5. Optionally set up the **systemd watchdog** and the **SSH script** on the Docker host.
 
-## Fehlerbehebung
+## Troubleshooting
 
-| Symptom | Ursache und Lösung |
+| Symptom | Cause and fix |
 |---|---|
-| Sollwert ändert sich stundenlang nicht | Normal, wenn der Akku an der Entladegrenze sitzt oder der Verbrauch innerhalb der Hysterese bleibt. Der Watchdog warnt deshalb nur, wenn der Akku über Entladegrenze plus 3 % liegt. |
-| Automation läuft nie | Eine der Entitäten in der Bedingung „Alle Entitäten verfügbar“ ist `unavailable`. Unter Entwicklerwerkzeuge → Zustände prüfen, meist ist noah-mqtt nicht verbunden. |
-| NOAH-Entitäten fehlen in Home Assistant | MQTT-Integration in HA einrichten und `docker logs noah-mqtt` auf Anmeldefehler an der Growatt-Cloud prüfen. |
-| Ständiger Wechsel zwischen zwei Sollwerten | Hausverbrauch schwankt um die Hysterese. Hysterese auf 60 W erhöhen oder den Verbrauchssensor glätten. |
+| Setpoint doesn't change for hours | Normal when the battery sits at the discharge limit or consumption stays within the hysteresis. That's why the watchdog only warns when the battery is above the discharge limit plus 3 %. |
+| Automation never runs | One of the entities in the "All entities available" condition is `unavailable`. Check under Developer tools → States; usually noah-mqtt isn't connected. |
+| NOAH entities missing in Home Assistant | Set up the MQTT integration in HA and check `docker logs noah-mqtt` for login errors against the Growatt cloud. |
+| Constant switching between two setpoints | Household consumption fluctuates around the hysteresis. Raise the hysteresis to 60 W or smooth the consumption sensor. |
 
-## Zugangsdaten und eigene Werte
+## Credentials and your own values
 
-Im Repo stehen keine echten Zugangsdaten, keine IP-Adressen und keine Seriennummern. Diese Stellen
-müssen mit den eigenen Werten gefüllt werden:
+The repo contains no real credentials, no IP addresses and no serial numbers. These spots
+must be filled with your own values:
 
-| Was | Im Repo | Wo der echte Wert hingehört |
+| What | In the repo | Where the real value goes |
 |---|---|---|
-| Adresse des MQTT-Brokers | `<mqtt-host>` | `MQTT_HOST` in `docker/.env` (Vorlage [`docker/.env.example`](docker/.env.example)) und `url` in `docker/uni-meter/uni-meter.conf` |
-| MQTT-Benutzer und -Passwort | `<mqtt-benutzer>`, `<mqtt-passwort>` | `MQTT_USERNAME`, `MQTT_PASSWORD` in `docker/.env`, dazu `user`/`password` in `docker/uni-meter/uni-meter.conf` |
-| Login der Growatt-Cloud | `<growatt-login>`, `<growatt-passwort>` | `GROWATT_USERNAME`, `GROWATT_PASSWORD` in `docker/.env` |
-| uni-meter-Konfiguration | [`uni-meter.conf.example`](docker/uni-meter/uni-meter.conf.example) | kopieren nach `docker/uni-meter/uni-meter.conf` und ausfüllen |
-| Entität des Zusatzakkus | `sensor.noah_2000_bat1_soc` | in [`homeassistant/automations.yaml`](homeassistant/automations.yaml) durch die eigene ID ersetzen. Bei manchen Anlagen enthält sie die Seriennummer. |
-| Benachrichtigung aufs Handy | `notify.mobile_app_mein_handy` | in `automations.yaml` durch den eigenen Dienst der Companion-App ersetzen |
-| Hausverbrauch | `sensor.hausverbrauch` | eigener Sensor, Beispiel in [`homeassistant/helpers.yaml`](homeassistant/helpers.yaml) |
-| Ordner auf dem Docker-Host | `/opt/noah-nulleinspeisung/docker` | `WorkingDirectory` in [`pi/noah-mqtt.service`](pi/noah-mqtt.service) |
-| SSH-Schlüssel für den Neustart aus Home Assistant | nicht enthalten | eigenen Schlüssel erzeugen und in `~/.ssh/authorized_keys` des Docker-Hosts mit `command="/pfad/noah-mqtt-ensure.sh"` eintragen |
+| MQTT broker address | `<mqtt-host>` | `MQTT_HOST` in `docker/.env` (template [`docker/.env.example`](docker/.env.example)) and `url` in `docker/uni-meter/uni-meter.conf` |
+| MQTT user and password | `<mqtt-user>`, `<mqtt-password>` | `MQTT_USERNAME`, `MQTT_PASSWORD` in `docker/.env`, plus `user`/`password` in `docker/uni-meter/uni-meter.conf` |
+| Growatt cloud login | `<growatt-login>`, `<growatt-password>` | `GROWATT_USERNAME`, `GROWATT_PASSWORD` in `docker/.env` |
+| uni-meter configuration | [`uni-meter.conf.example`](docker/uni-meter/uni-meter.conf.example) | copy to `docker/uni-meter/uni-meter.conf` and fill in |
+| Extension battery entity | `sensor.noah_2000_bat1_soc` | replace with your own ID in [`homeassistant/automations.yaml`](homeassistant/automations.yaml). On some systems it contains the serial number. |
+| Phone notification | `notify.mobile_app_my_phone` | replace in `automations.yaml` with your own Companion app service |
+| Household consumption | `sensor.house_consumption` | your own sensor, example in [`homeassistant/helpers.yaml`](homeassistant/helpers.yaml) |
+| Folder on the Docker host | `/opt/noah-nulleinspeisung/docker` | `WorkingDirectory` in [`pi/noah-mqtt.service`](pi/noah-mqtt.service) |
+| SSH key for restarts from Home Assistant | not included | create your own key and add it to the Docker host's `~/.ssh/authorized_keys` with `command="/path/noah-mqtt-ensure.sh"` |
 
-`docker/.env` und `docker/uni-meter/uni-meter.conf` stehen in `.gitignore`.
+`docker/.env` and `docker/uni-meter/uni-meter.conf` are listed in `.gitignore`.
 
-## Grenzen
+## Limitations
 
-- Die Daten kommen über die Growatt-Cloud, nicht lokal vom Gerät. Fällt die Cloud aus, steht
-  die Regelung. Deshalb die Watchdogs.
-- Neue Sollwerte wirken erst nach dem nächsten Abruf von noah-mqtt, die Regelung ist also
-  bewusst träge und nicht für sekundengenaues Nachführen gedacht.
-- Die Schwellen (15 %, 20 %, Puffer, 6 % Drift) sind Erfahrungswerte für diese eine Anlage,
-  keine Herstellerangaben.
+- The data comes through the Growatt cloud, not locally from the device. If the cloud goes down,
+  the control loop stops. Hence the watchdogs.
+- New setpoints only take effect after noah-mqtt's next poll, so the control loop is deliberately
+  slow and not meant for second-by-second tracking.
+- The thresholds (15 %, 20 %, buffer, 6 % drift) are empirical values for this one system,
+  not manufacturer specifications.
 
-## Lizenz
+## License
 
-MIT für die Dateien in diesem Repo, siehe [LICENSE](LICENSE).
+MIT for the files in this repo, see [LICENSE](LICENSE).

@@ -1,20 +1,20 @@
 - id: '1776453449525'
-  alias: StromAutomatisierung
-  description: NOAH Entladeleistung mit Batteriegesundheitsschutz (basierend auf dem niedrigeren SoC von Master/Slave) und
-    SoC-Differenz-Überwachung – drosselt tagsüber bei Differenz >6% die Ausgangsleistung und benachrichtigt per Mobile App
+  alias: Power control
+  description: NOAH discharge power with battery health protection (based on the lower SoC of master/slave) and
+    SoC difference monitoring – throttles output power during the day if the difference is >6% and notifies via the mobile app
   triggers:
   - trigger: time_pattern
     minutes: /1
   conditions:
   - condition: template
-    alias: Alle Entitäten verfügbar
+    alias: All entities available
     value_template: "{{\n  states('sensor.noah_2000_bat0_soc') not in ['unknown', 'unavailable', 'none']\n  and states('sensor.noah_2000_bat1_soc')\
-      \ not in ['unknown', 'unavailable', 'none']\n  and states('sensor.hausverbrauch') not in ['unknown', 'unavailable',\
-      \ 'none']\n  and states('input_number.noah_letzter_sollwert') not in ['unknown', 'unavailable', 'none']\n  and states('number.noah_2000_system_output_power')\
+      \ not in ['unknown', 'unavailable', 'none']\n  and states('sensor.house_consumption') not in ['unknown', 'unavailable',\
+      \ 'none']\n  and states('input_number.noah_last_setpoint') not in ['unknown', 'unavailable', 'none']\n  and states('number.noah_2000_system_output_power')\
       \ not in ['unknown', 'unavailable', 'none']\n}}\n"
   - condition: template
-    alias: Sollwert hat sich relevant geändert
-    value_template: '{{ ((final | float(0)) - (last | float(0))) | abs >= (hysterese | int(40)) }}
+    alias: Setpoint changed significantly
+    value_template: '{{ ((final | float(0)) - (last | float(0))) | abs >= (hysteresis | int(40)) }}
 
       '
   actions:
@@ -25,9 +25,9 @@
       sequence:
       - action: logbook.log
         data:
-          name: NOAH Schutz
-          message: ⚠️ Tiefentladeschutz – niedrigster SoC {{ soc_min | round(1) }}% unter 15% (Master {{ soc | round(1) }}%,
-            Slave {{ soc_slave | round(1) }}%). Setze 0W.
+          name: NOAH protection
+          message: ⚠️ Deep discharge protection – lowest SoC {{ soc_min | round(1) }}% below 15% (master {{ soc | round(1) }}%,
+            slave {{ soc_slave | round(1) }}%). Setting 0W.
           entity_id: sensor.noah_2000_bat0_soc
       - action: number.set_value
         target:
@@ -36,104 +36,104 @@
           value: 0
       - action: input_number.set_value
         target:
-          entity_id: input_number.noah_letzter_sollwert
+          entity_id: input_number.noah_last_setpoint
         data:
           value: 0
     default:
     - action: number.set_value
-      alias: NOAH Ausgangsleistung setzen
+      alias: Set NOAH output power
       target:
         entity_id: number.noah_2000_system_output_power
       data:
         value: '{{ final | int(0) }}'
     - action: input_number.set_value
-      alias: Letzten Sollwert speichern
+      alias: Store last setpoint
       target:
-        entity_id: input_number.noah_letzter_sollwert
+        entity_id: input_number.noah_last_setpoint
       data:
         value: '{{ final | int(0) }}'
   - choose:
     - conditions:
       - condition: template
-        value_template: '{{ drift_aktiv and not is_state(''input_boolean.noah_diff_warnung'', ''on'') }}'
+        value_template: '{{ drift_active and not is_state(''input_boolean.noah_soc_diff_warning'', ''on'') }}'
       sequence:
       - action: input_boolean.turn_on
         target:
-          entity_id: input_boolean.noah_diff_warnung
+          entity_id: input_boolean.noah_soc_diff_warning
       - action: logbook.log
         data:
-          name: NOAH SOC-Wächter
-          message: ⚠️ SoC-Differenz {{ differenz }}% (Master {{ soc | round(1) }}%, Slave {{ soc_slave | round(1) }}%) – drossle
-            Ausgangsleistung auf max. {{ throttle_limit }}W.
+          name: NOAH SoC guard
+          message: ⚠️ SoC difference {{ difference }}% (master {{ soc | round(1) }}%, slave {{ soc_slave | round(1) }}%) – throttling
+            output power to max. {{ throttle_limit }}W.
           entity_id: sensor.noah_2000_bat0_soc
       - action: persistent_notification.create
         data:
-          title: NOAH Batterie-Differenz
-          message: Master {{ soc | round(1) }}% / Slave {{ soc_slave | round(1) }}% – Differenz {{ differenz }}%. Ausgangsleistung
-            wird auf max. {{ throttle_limit }}W begrenzt.
-      - action: notify.mobile_app_mein_handy
+          title: NOAH battery difference
+          message: Master {{ soc | round(1) }}% / slave {{ soc_slave | round(1) }}% – difference {{ difference }}%. Output power
+            is limited to max. {{ throttle_limit }}W.
+      - action: notify.mobile_app_my_phone
         data:
-          title: 🔋 NOAH Batterie-Differenz
-          message: Master {{ soc | round(1) }}% / Slave {{ soc_slave | round(1) }}% (Diff {{ differenz }}%) – Ausgangsleistung
-            gedrosselt.
+          title: 🔋 NOAH battery difference
+          message: Master {{ soc | round(1) }}% / slave {{ soc_slave | round(1) }}% (diff {{ difference }}%) – output power
+            throttled.
     - conditions:
       - condition: template
-        value_template: '{{ not drift_aktiv and is_state(''input_boolean.noah_diff_warnung'', ''on'') }}'
+        value_template: '{{ not drift_active and is_state(''input_boolean.noah_soc_diff_warning'', ''on'') }}'
       sequence:
       - action: input_boolean.turn_off
         target:
-          entity_id: input_boolean.noah_diff_warnung
+          entity_id: input_boolean.noah_soc_diff_warning
       - action: logbook.log
         data:
-          name: NOAH SOC-Wächter
-          message: ✅ SoC-Differenz wieder im Rahmen ({{ differenz }}%) – Drosselung aufgehoben.
+          name: NOAH SoC guard
+          message: ✅ SoC difference back in range ({{ difference }}%) – throttling lifted.
           entity_id: sensor.noah_2000_bat0_soc
   mode: restart
   variables:
     soc: '{{ states(''sensor.noah_2000_bat0_soc'') | float(0) }}'
     soc_slave: '{{ states(''sensor.noah_2000_bat1_soc'') | float(0) }}'
     soc_min: '{{ [soc, soc_slave] | min }}'
-    differenz: '{{ (soc_slave - soc) | round(1) }}'
-    sonne_aktiv: '{{ states(''sensor.noah_2000_solar_power'') | float(0) > 100 }}'
-    drift_aktiv: '{{ (differenz | abs > 6) and sonne_aktiv }}'
+    difference: '{{ (soc_slave - soc) | round(1) }}'
+    sun_active: '{{ states(''sensor.noah_2000_solar_power'') | float(0) > 100 }}'
+    drift_active: '{{ (difference | abs > 6) and sun_active }}'
     throttle_limit: 100
-    load: '{{ states(''sensor.hausverbrauch'') | float(0) }}'
-    last: '{{ states(''input_number.noah_letzter_sollwert'') | float(0) }}'
+    load: '{{ states(''sensor.house_consumption'') | float(0) }}'
+    last: '{{ states(''input_number.noah_last_setpoint'') | float(0) }}'
     max_allowed: "{% if soc_min < 15 %}\n  0\n{% elif soc_min < 20 %}\n  100\n{% else %}\n  800\n{% endif %}\n"
-    puffer: "{% if soc_min > 60 %}\n  70\n{% elif soc_min > 30 %}\n  90\n{% else %}\n  150\n{% endif %}\n"
-    final_raw: "{% set maxp = max_allowed | float(0) %} {% set buf = puffer | float(0) %} {% if maxp <= 0 %}\n  0\n{% else\
+    buffer: "{% if soc_min > 60 %}\n  70\n{% elif soc_min > 30 %}\n  90\n{% else %}\n  150\n{% endif %}\n"
+    final_raw: "{% set maxp = max_allowed | float(0) %} {% set buf = buffer | float(0) %} {% if maxp <= 0 %}\n  0\n{% else\
       \ %}\n  {{ [[load - buf, 50] | max, maxp] | min | round(0) | int }}\n{% endif %}\n"
-    final: "{% if drift_aktiv %}\n  {{ [final_raw | int(0), throttle_limit] | min }}\n{% else %}\n  {{ final_raw | int(0)\
+    final: "{% if drift_active %}\n  {{ [final_raw | int(0), throttle_limit] | min }}\n{% else %}\n  {{ final_raw | int(0)\
       \ }}\n{% endif %}\n"
-    hysterese: "{% if final | float(0) == 0 and last | float(0) == 0 %}\n  999\n{% else %}\n  40\n{% endif %}\n"
+    hysteresis: "{% if final | float(0) == 0 and last | float(0) == 0 %}\n  999\n{% else %}\n  40\n{% endif %}\n"
 - id: '1776775202903'
-  alias: Hausverbrauch → MQTT Smart Meter
+  alias: House consumption → MQTT smart meter
   triggers:
   - seconds: /10
     trigger: time_pattern
   actions:
   - data:
-      topic: home/hausverbrauch
-      payload: '{"power": {{ (states(''sensor.hausverbrauch'') | float(0) * -1) | round(0) | int }}}'
+      topic: home/house_consumption
+      payload: '{"power": {{ (states(''sensor.house_consumption'') | float(0) * -1) | round(0) | int }}}'
       retain: true
     action: mqtt.publish
   mode: single
-- id: watchdog_hausverbrauch_per_mqtt_publishen
-  alias: 'Watchdog: Hausverbrauch → MQTT Smart Meter'
-  description: Meldet, wenn „Hausverbrauch → MQTT Smart Meter“ 30x ihr 10 s-Intervall verpasst (5 min ohne Lauf), deaktiviert
-    ist oder wieder läuft.
+- id: watchdog_house_consumption_to_mqtt_smart_meter
+  alias: 'Watchdog: House consumption → MQTT smart meter'
+  description: Reports when "House consumption → MQTT smart meter" misses its 10 s interval 30 times (5 min without a run), is disabled
+    or runs again.
   triggers:
   - trigger: template
     id: overdue
-    value_template: '{% set lt = state_attr(''automation.hausverbrauch_per_mqtt_publishen'', ''last_triggered'') %}
+    value_template: '{% set lt = state_attr(''automation.house_consumption_to_mqtt_smart_meter'', ''last_triggered'') %}
 
       {% set lt = as_datetime(lt) if lt is string else lt %}
 
-      {{ is_state(''automation.hausverbrauch_per_mqtt_publishen'', ''on'') and lt is not none and (now() - lt).total_seconds()
+      {{ is_state(''automation.house_consumption_to_mqtt_smart_meter'', ''on'') and lt is not none and (now() - lt).total_seconds()
       > 300 }}'
   - trigger: state
     id: disabled
-    entity_id: automation.hausverbrauch_per_mqtt_publishen
+    entity_id: automation.house_consumption_to_mqtt_smart_meter
     to:
     - 'off'
     - unavailable
@@ -141,7 +141,7 @@
       minutes: 5
   - trigger: state
     id: fired
-    entity_id: automation.hausverbrauch_per_mqtt_publishen
+    entity_id: automation.house_consumption_to_mqtt_smart_meter
     attribute: last_triggered
   conditions: []
   actions:
@@ -150,23 +150,23 @@
       - condition: trigger
         id: overdue
       sequence:
-      - action: notify.mobile_app_mein_handy
+      - action: notify.mobile_app_my_phone
         data:
-          title: ⚠️ Automation überfällig
+          title: ⚠️ Automation overdue
           message: '{% set lt = state_attr(target, ''last_triggered'') %}{% set lt = as_datetime(lt) if lt is string else
-            lt %}„{{ name }}“ läuft seit 5 min nicht mehr (30x Intervall verpasst). Zuletzt: {{ (lt | as_local).strftime(''%d.%m.
-            %H:%M'') if lt else ''nie'' }}.'
+            lt %}"{{ name }}" has not run for 5 min (missed its interval 30 times). Last run: {{ (lt | as_local).strftime(''%Y-%m-%d
+            %H:%M'') if lt else ''never'' }}.'
           data:
             tag: '{{ tag }}'
     - conditions:
       - condition: trigger
         id: disabled
       sequence:
-      - action: notify.mobile_app_mein_handy
+      - action: notify.mobile_app_my_phone
         data:
-          title: ⛔ Automation kann nicht auslösen
-          message: „{{ name }}“ ist {{ 'deaktiviert' if trigger.to_state.state == 'off' else 'nicht verfügbar (Konfigurationsfehler?)'
-            }}.
+          title: ⛔ Automation can't trigger
+          message: '"{{ name }}" is {{ ''disabled'' if trigger.to_state.state == ''off'' else ''unavailable (configuration error?)''
+            }}.'
           data:
             tag: '{{ tag }}'
     - conditions:
@@ -180,36 +180,36 @@
 
           {{ p is not none and c is not none and (c - p).total_seconds() > threshold | float }}'
       sequence:
-      - action: notify.mobile_app_mein_handy
+      - action: notify.mobile_app_my_phone
         data:
-          title: ✅ Automation läuft wieder
-          message: „{{ name }}“ hat gerade wieder ausgelöst.
+          title: ✅ Automation running again
+          message: '"{{ name }}" just triggered again.'
           data:
             tag: '{{ tag }}'
   mode: queued
   max_exceeded: silent
   variables:
-    target: automation.hausverbrauch_per_mqtt_publishen
+    target: automation.house_consumption_to_mqtt_smart_meter
     threshold: 300
-    name: Hausverbrauch → MQTT Smart Meter
-    tag: watchdog_automation_hausverbrauch_per_mqtt_publishen
-- id: watchdog_stromautomatisierung
-  alias: 'Watchdog: StromAutomatisierung'
-  description: 'Meldet, wenn „StromAutomatisierung“ 60x ihr 1 min-Intervall verpasst (60 min ohne Lauf), deaktiviert ist oder
-    wieder läuft. Seit 03.11.2026: ''ueberfaellig'' und ''laeuft wieder'' nur, wenn der NOAH wach sein muesste (Akku ueber
-    Entladegrenze + 3 %). Sitzt der Akku an der Grenze, aendert sich der Sollwert stundenlang nicht — das ist normal.'
+    name: House consumption → MQTT smart meter
+    tag: watchdog_automation_house_consumption_to_mqtt_smart_meter
+- id: watchdog_power_control
+  alias: 'Watchdog: Power control'
+  description: 'Reports when "Power control" misses its 1 min interval 60 times (60 min without a run), is disabled or
+    runs again. Since 2026-11-03: ''overdue'' and ''running again'' only when the NOAH should be awake (battery above
+    discharge limit + 3 %). When the battery sits at the limit, the setpoint does not change for hours — that is normal.'
   triggers:
   - trigger: template
     id: overdue
-    value_template: '{% set lt = state_attr(''automation.stromautomatisierung'', ''last_triggered'') %}
+    value_template: '{% set lt = state_attr(''automation.power_control'', ''last_triggered'') %}
 
       {% set lt = as_datetime(lt) if lt is string else lt %}
 
-      {{ is_state(''automation.stromautomatisierung'', ''on'') and lt is not none and (now() - lt).total_seconds() > 3600
+      {{ is_state(''automation.power_control'', ''on'') and lt is not none and (now() - lt).total_seconds() > 3600
       }}'
   - trigger: state
     id: disabled
-    entity_id: automation.stromautomatisierung
+    entity_id: automation.power_control
     to:
     - 'off'
     - unavailable
@@ -217,7 +217,7 @@
       minutes: 5
   - trigger: state
     id: fired
-    entity_id: automation.stromautomatisierung
+    entity_id: automation.power_control
     attribute: last_triggered
   conditions: []
   actions:
@@ -226,26 +226,26 @@
       - condition: trigger
         id: overdue
       - condition: template
-        alias: NOAH müsste wach sein
-        value_template: '{{ wach }}'
+        alias: NOAH should be awake
+        value_template: '{{ awake }}'
       sequence:
-      - action: notify.mobile_app_mein_handy
+      - action: notify.mobile_app_my_phone
         data:
-          title: ⚠️ Automation überfällig
+          title: ⚠️ Automation overdue
           message: '{% set lt = state_attr(target, ''last_triggered'') %}{% set lt = as_datetime(lt) if lt is string else
-            lt %}„{{ name }}“ läuft seit 1 h nicht mehr (60x Intervall verpasst). Zuletzt: {{ (lt | as_local).strftime(''%d.%m.
-            %H:%M'') if lt else ''nie'' }}.'
+            lt %}"{{ name }}" has not run for 1 h (missed its interval 60 times). Last run: {{ (lt | as_local).strftime(''%Y-%m-%d
+            %H:%M'') if lt else ''never'' }}.'
           data:
             tag: '{{ tag }}'
     - conditions:
       - condition: trigger
         id: disabled
       sequence:
-      - action: notify.mobile_app_mein_handy
+      - action: notify.mobile_app_my_phone
         data:
-          title: ⛔ Automation kann nicht auslösen
-          message: „{{ name }}“ ist {{ 'deaktiviert' if trigger.to_state.state == 'off' else 'nicht verfügbar (Konfigurationsfehler?)'
-            }}.
+          title: ⛔ Automation can't trigger
+          message: '"{{ name }}" is {{ ''disabled'' if trigger.to_state.state == ''off'' else ''unavailable (configuration error?)''
+            }}.'
           data:
             tag: '{{ tag }}'
     - conditions:
@@ -259,22 +259,22 @@
 
           {{ p is not none and c is not none and (c - p).total_seconds() > threshold | float }}'
       - condition: template
-        alias: NOAH müsste wach sein
-        value_template: '{{ wach }}'
+        alias: NOAH should be awake
+        value_template: '{{ awake }}'
       sequence:
-      - action: notify.mobile_app_mein_handy
+      - action: notify.mobile_app_my_phone
         data:
-          title: ✅ Automation läuft wieder
-          message: „{{ name }}“ hat gerade wieder ausgelöst.
+          title: ✅ Automation running again
+          message: '"{{ name }}" just triggered again.'
           data:
             tag: '{{ tag }}'
   mode: queued
   max_exceeded: silent
   variables:
-    target: automation.stromautomatisierung
+    target: automation.power_control
     threshold: 3600
-    name: StromAutomatisierung
-    tag: watchdog_automation_stromautomatisierung
-    wach: '{% set soc = states(''sensor.noah_2000_bat0_soc'') | float(100) %}{% set lim = states(''number.noah_2000_discharge_limit'')
+    name: Power control
+    tag: watchdog_automation_power_control
+    awake: '{% set soc = states(''sensor.noah_2000_bat0_soc'') | float(100) %}{% set lim = states(''number.noah_2000_discharge_limit'')
       | float(15) %}{{ soc > lim + 3 }}'
 
