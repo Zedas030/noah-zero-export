@@ -99,7 +99,7 @@ must be filled with your own values:
 | Extension battery entity | `sensor.noah_2000_bat1_soc` | replace with your own ID in [`homeassistant/automations.yaml`](homeassistant/automations.yaml). On some systems it contains the serial number. |
 | Phone notification | `notify.mobile_app_my_phone` | replace in `automations.yaml` with your own Companion app service |
 | Household consumption | `sensor.house_consumption` | your own sensor, example in [`homeassistant/helpers.yaml`](homeassistant/helpers.yaml) |
-| Folder on the Docker host | `/opt/noah-nulleinspeisung/docker` | `WorkingDirectory` in [`pi/noah-mqtt.service`](pi/noah-mqtt.service) |
+| Folder on the Docker host | `/opt/noah-zero-export/docker` | `WorkingDirectory` in [`pi/noah-mqtt.service`](pi/noah-mqtt.service) |
 | SSH key for restarts from Home Assistant | not included | create your own key and add it to the Docker host's `~/.ssh/authorized_keys` with `command="/path/noah-mqtt-ensure.sh"` |
 
 `docker/.env` and `docker/uni-meter/uni-meter.conf` are listed in `.gitignore`.

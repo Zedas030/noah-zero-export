@@ -10,7 +10,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/noah-nulleinspeisung/docker
+WorkingDirectory=/opt/noah-zero-export/docker
 
 Restart=always
 RestartSec=360
