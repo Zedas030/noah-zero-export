@@ -1,6 +1,10 @@
-# NOAH zero export with Home Assistant
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="NOAH zero export with Home Assistant" width="100%">
+</p>
 
-> 🇩🇪 German version: [noah-nulleinspeisung-de](https://github.com/Zedas030/noah-nulleinspeisung-de)
+<p align="center">
+  <a href="#data-flow">Data flow</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#how-the-control-loop-calculates">Control loop</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#setup">Setup</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#credentials-and-your-own-values">Credentials</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://github.com/Zedas030/noah-nulleinspeisung-de">Deutsch</a>
+</p>
 
 Every minute, sets the output power of a **Growatt NOAH 2000** (balcony solar battery) so that
 it roughly covers the current household consumption and gives away as little as possible to the grid.
@@ -11,18 +15,10 @@ Running since October 2026 on a Raspberry Pi with Home Assistant, Mosquitto and 
 
 ## Data flow
 
-```mermaid
-flowchart LR
-  G[Growatt cloud] <--> N[noah-mqtt<br/>Docker]
-  N <--> M[(Mosquitto)]
-  M <--> HA[Home Assistant]
-  Z[Smart meter, metering plugs<br/>or template] --> H[sensor.house_consumption]
-  H --> HA
-  HA -- setpoint every minute --> N
-  HA -- every 10 s home/house_consumption --> M
-  M --> U[uni-meter<br/>optional, emulated smart meter]
-  HA -. watchdogs .-> P[Push to phone]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/data-flow-dark.svg">
+  <img src="docs/assets/data-flow-light.svg" alt="Data flow: Growatt cloud and noah-mqtt, Mosquitto, Home Assistant with the consumption sensor, setpoint every minute, uni-meter, watchdog push" width="100%">
+</picture>
 
 ## How the control loop calculates
 
